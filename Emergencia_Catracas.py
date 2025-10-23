@@ -15,7 +15,7 @@ class RelayTesterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Controlador de Catracas")
-        self.root.geometry("300x300+{}+0".format(root.winfo_screenwidth() - 300))
+        self.root.geometry("300x200+{}+0".format(root.winfo_screenwidth() - 300))  # Janela menor
         
         # Configurações do usuário master
         self.MASTER_USER = {
@@ -40,9 +40,11 @@ class RelayTesterApp:
         self.password = tk.StringVar(value="0")
         self.image_state = True
         self.relay_devices = []
+        self.areas = {}  # Dicionário para armazenar áreas
         
         # Caminhos para arquivos embutidos
         self.config_file = self.get_data_path("config.txt")
+        self.areas_file = self.get_data_path("areas.txt")
         self.passwords_file = self.get_data_path("senha.txt")
         self.log_file = self.get_data_path("log.txt")
         
@@ -50,15 +52,33 @@ class RelayTesterApp:
         os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
         
         self.load_config()
+        self.load_areas()
         
-        # Cores
+        # Cores disponíveis para áreas (nomes em português)
+        self.available_colors = {
+            'Vermelho': '#FF0000',
+            'Verde': '#4CAF50', 
+            'Laranja': '#FF6B35',
+            'Turquesa': '#4ECDC4',
+            'Azul Claro': '#45B7D1',
+            'Verde Claro': '#96CEB4',
+            'Amarelo': '#F7DC6F',
+            'Roxo': '#9B59B6',
+            'Rosa': '#E91E63',
+            'Cinza': '#95A5A6',
+            'Marrom': '#8B4513',
+            'Azul Marinho': '#2C3E50'
+        }
+        
+        # Cores para botões específicos
         self.button_colors = {
-            'emergency': '#FF0000',  # Vermelho
+            'emergency': '#FF0000',  # Vermelho para Geral
             'config': '#4CAF50',     # Verde
             'active': '#FF4500',     # Laranja mais escuro
-            'success': '#4BB543',    # Verde sucesso
-            'advanced': '#4682B4'    # Azul aço
+            'success': '#4BB543'     # Verde sucesso
         }
+        # Adicionar cores disponíveis ao button_colors
+        self.button_colors.update(self.available_colors)
         
         # Carregar senhas
         self.passwords = self.load_passwords()
@@ -130,6 +150,38 @@ class RelayTesterApp:
             messagebox.showerror("Erro", f"Falha ao carregar configurações: {str(e)}")
             self.relay_devices = []
     
+    def load_areas(self):
+        """Carrega as áreas salvas no arquivo areas.txt"""
+        try:
+            if os.path.exists(self.areas_file):
+                with open(self.areas_file, "r") as f:
+                    data = f.read()
+                    if data:
+                        self.areas = json.loads(data)
+            else:
+                # Áreas iniciais vazias - o usuário cadastra as áreas que quiser
+                self.areas = {}
+                self.save_areas()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Falha ao carregar áreas: {str(e)}")
+            self.areas = {}
+    
+    def save_config(self):
+        """Salva as configurações no arquivo config.txt"""
+        try:
+            with open(self.config_file, "w") as f:
+                f.write(json.dumps(self.relay_devices))
+        except Exception as e:
+            messagebox.showerror("Erro", f"Falha ao salvar configurações: {str(e)}")
+    
+    def save_areas(self):
+        """Salva as áreas no arquivo areas.txt"""
+        try:
+            with open(self.areas_file, "w") as f:
+                f.write(json.dumps(self.areas))
+        except Exception as e:
+            messagebox.showerror("Erro", f"Falha ao salvar áreas: {str(e)}")
+    
     def load_passwords(self):
         """Carrega as senhas do arquivo senha.txt"""
         passwords = {}
@@ -149,14 +201,6 @@ class RelayTesterApp:
             messagebox.showerror("Erro", f"Falha ao carregar senhas: {str(e)}")
         
         return passwords
-    
-    def save_config(self):
-        """Salva as configurações no arquivo config.txt"""
-        try:
-            with open(self.config_file, "w") as f:
-                f.write(json.dumps(self.relay_devices))
-        except Exception as e:
-            messagebox.showerror("Erro", f"Falha ao salvar configurações: {str(e)}")
     
     def save_passwords(self, passwords=None):
         """Salva as senhas no arquivo senha.txt"""
@@ -195,56 +239,116 @@ class RelayTesterApp:
             print(f"Erro ao salvar log: {str(e)}")
     
     def create_main_screen(self):
-        """Cria a tela principal com botão de emergência"""
+        """Cria a tela principal com botões de emergência por área"""
         # Frame principal
         self.main_frame = ttk.Frame(self.root)
-        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)  # Menos padding
         
         # Menu (três risquinhos)
         menubar = tk.Menu(self.root)
         config_menu = tk.Menu(menubar, tearoff=0)
-        config_menu.add_command(label="Configurações", command=self.show_config_screen)
+        config_menu.add_command(label="Relés", command=self.show_config_screen)
+        config_menu.add_command(label="Áreas", command=self.show_areas_screen)
         config_menu.add_command(label="Usuários", command=self.show_users_screen)
         config_menu.add_command(label="Ajuda", command=self.show_help_screen)
         menubar.add_cascade(label="☰", menu=config_menu)
         self.root.config(menu=menubar)
         
-        # Logo - reduzida para caber na tela menor
+        # Logo - ainda menor
         try:
             logo_path = self.resource_path("logo.png")
             self.logo_image = Image.open(logo_path)
-            self.logo_image = self.logo_image.resize((180, 55), Image.Resampling.LANCZOS)
+            self.logo_image = self.logo_image.resize((120, 37), Image.Resampling.LANCZOS)  # Menor
             self.logo_photo = ImageTk.PhotoImage(self.logo_image)
             
             logo_label = ttk.Label(self.main_frame, image=self.logo_photo)
-            logo_label.pack(pady=5)
+            logo_label.pack(pady=2)  # Menos padding
         except Exception as e:
             print(f"Não foi possível carregar a imagem logo.png: {str(e)}")
-            ttk.Label(self.main_frame, text="Logo da Empresa", font=('Helvetica', 10)).pack(pady=5)
+            ttk.Label(self.main_frame, text="Logo", font=('Helvetica', 8)).pack(pady=2)
         
-        # Botão de emergência (redondo) - ajustado para tela menor
+        # Frame para botões das áreas
+        self.buttons_frame = ttk.Frame(self.main_frame)
+        self.buttons_frame.pack(fill=tk.BOTH, expand=True, pady=2)  # Menos padding
+        
+        # Criar botões para cada área
+        self.create_area_buttons()
+        
+        # Label para mensagem de status (menor)
+        self.status_label = ttk.Label(self.main_frame, text="", font=('Helvetica', 8))
+        self.status_label.pack(pady=2)
+        
+        # Botão GERAL pequeno no canto inferior direito
+        self.create_emergency_button()
+    
+    def create_emergency_button(self):
+        """Cria o botão de emergência geral pequeno no canto inferior direito"""
         self.emergency_btn = tk.Button(
-            self.main_frame,
-            text="EMERGÊNCIA\nCATRACAS",
-            command=self.toggle_image_and_send_pulse,
+            self.root,
+            text="GERAL",
+            command=lambda: self.toggle_image_and_send_pulse_area('GERAL'),
             bg=self.button_colors['emergency'],
             fg="white",
-            font=('Helvetica', 12, 'bold'),
+            font=('Helvetica', 8, 'bold'),  # Fonte menor
             activebackground=self.button_colors['active'],
             relief=tk.RAISED,
-            borderwidth=3,
-            width=18,
-            height=8,
+            borderwidth=2,  # Borda mais fina
+            width=6,        # Largura menor
+            height=2,       # Altura menor
             compound=tk.CENTER
         )
-        self.emergency_btn.pack(pady=5, ipadx=5, ipady=5)
-        
-        # Label para mensagem de status
-        self.status_label = ttk.Label(self.main_frame, text="", font=('Helvetica', 9))
-        self.status_label.pack(pady=5)
-        
-        # Configurar para ficar redondo (aproximadamente)
+        # Posicionar no canto inferior direito
+        self.emergency_btn.place(relx=1.0, rely=1.0, anchor='se', x=-5, y=-5)
         self.emergency_btn.config(highlightthickness=0)
+    
+    def create_area_buttons(self):
+        """Cria os botões para cada área (menores)"""
+        # Limpar botões existentes
+        for widget in self.buttons_frame.winfo_children():
+            widget.destroy()
+        
+        if not self.areas:
+            # Se não há áreas, mostrar mensagem
+            ttk.Label(self.buttons_frame, text="Nenhuma área cadastrada", 
+                     font=('Helvetica', 9), foreground='gray').pack(expand=True)
+            return
+        
+        # Criar botões para cada área cadastrada pelo usuário
+        row, col = 0, 0
+        max_cols = 2  # Máximo de 2 colunas
+        
+        for area_name, area_data in self.areas.items():
+            color_name = area_data['color']
+            color = self.button_colors.get(color_name, self.button_colors['Vermelho'])
+            
+            btn = tk.Button(
+                self.buttons_frame,
+                text=area_name.upper(),  # Apenas o nome da área, sem "EMERGÊNCIA"
+                command=lambda area=area_name: self.toggle_image_and_send_pulse_area(area),
+                bg=color,
+                fg="white",
+                font=('Helvetica', 9, 'bold'),  # Fonte menor
+                activebackground=self.button_colors['active'],
+                relief=tk.RAISED,
+                borderwidth=2,  # Borda mais fina
+                width=12,       # Largura menor
+                height=2,       # Altura menor
+                compound=tk.CENTER,
+                wraplength=100  # Wrap para nomes longos
+            )
+            btn.grid(row=row, column=col, padx=3, pady=3, sticky="nsew")  # Menos padding
+            btn.config(highlightthickness=0)
+            
+            col += 1
+            if col >= max_cols:
+                col = 0
+                row += 1
+        
+        # Configurar grid para expandir
+        for i in range(row + 1):
+            self.buttons_frame.grid_rowconfigure(i, weight=1)
+        for j in range(max_cols):
+            self.buttons_frame.grid_columnconfigure(j, weight=1)
     
     def block_main_window(self):
         """Bloqueia a janela principal quando uma secundária está aberta"""
@@ -280,6 +384,16 @@ class RelayTesterApp:
             
             if self.config_window is None or not self.config_window.winfo_exists():
                 self.create_config_screen()
+            else:
+                self.config_window.lift()
+    
+    def show_areas_screen(self):
+        """Mostra a tela de gerenciamento de áreas após verificar senha"""
+        if not self.passwords or self.check_password("Áreas"):
+            self.block_other_windows(None)
+            
+            if self.config_window is None or not self.config_window.winfo_exists():
+                self.create_areas_screen()
             else:
                 self.config_window.lift()
     
@@ -421,13 +535,21 @@ class RelayTesterApp:
         self.new_ip = ttk.Entry(add_frame)
         self.new_ip.grid(row=1, column=1, sticky=tk.EW, pady=2, padx=5)
         
+        # Área do dispositivo (apenas áreas cadastradas pelo usuário)
+        available_areas = list(self.areas.keys())
+        ttk.Label(add_frame, text="Área:").grid(row=2, column=0, sticky=tk.W, pady=2)
+        self.new_area = ttk.Combobox(add_frame, values=available_areas)
+        if available_areas:
+            self.new_area.set(available_areas[0])  # Define a primeira área disponível como padrão
+        self.new_area.grid(row=2, column=1, sticky=tk.EW, pady=2, padx=5)
+        
         # Variável para controle da porta
         self.advanced_options = tk.BooleanVar(value=False)
         self.custom_port = tk.StringVar(value="80")
         
         # Frame para opções avançadas
         advanced_frame = ttk.Frame(add_frame)
-        advanced_frame.grid(row=2, column=0, columnspan=2, sticky=tk.EW, pady=5)
+        advanced_frame.grid(row=3, column=0, columnspan=2, sticky=tk.EW, pady=5)
         
         ttk.Checkbutton(
             advanced_frame, 
@@ -444,7 +566,7 @@ class RelayTesterApp:
         port_entry.grid(row=0, column=1, sticky=tk.W)
         
         ttk.Button(add_frame, text="Incluir Novo Relé", 
-                 command=self.add_new_relay).grid(row=4, column=0, columnspan=2, pady=5)
+                 command=self.add_new_relay).grid(row=5, column=0, columnspan=2, pady=5)
         
         # Lista de dispositivos
         list_frame = ttk.LabelFrame(devices_tab, text="Dispositivos cadastrados", padding=10)
@@ -526,6 +648,150 @@ class RelayTesterApp:
         
         # Configurar fechamento da janela
         self.config_window.protocol("WM_DELETE_WINDOW", self.on_config_close)
+    
+    def create_areas_screen(self):
+        """Cria a tela de gerenciamento de áreas"""
+        self.config_window = tk.Toplevel(self.root)
+        self.config_window.title("Gerenciamento de Áreas")
+        self.config_window.geometry("600x500")
+        
+        # Configurar ícone da janela
+        self.set_window_icon(self.config_window)
+        
+        # Bloquear outras janelas
+        self.block_other_windows(self.config_window)
+        
+        # Centralizar janela
+        window_width = 600
+        window_height = 500
+        screen_width = self.config_window.winfo_screenwidth()
+        screen_height = self.config_window.winfo_screenheight()
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        self.config_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        
+        # Frame para adicionar nova área
+        add_frame = ttk.LabelFrame(self.config_window, text="Adicionar Nova Área", padding=10)
+        add_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Label(add_frame, text="Nome da Área:").grid(row=0, column=0, sticky=tk.W, pady=2)
+        self.new_area_name = ttk.Entry(add_frame)
+        self.new_area_name.grid(row=0, column=1, sticky=tk.EW, pady=2, padx=5)
+        
+        ttk.Label(add_frame, text="Cor:").grid(row=1, column=0, sticky=tk.W, pady=2)
+        self.new_area_color = ttk.Combobox(add_frame, values=list(self.available_colors.keys()))
+        self.new_area_color.set('Verde')  # Cor padrão
+        self.new_area_color.grid(row=1, column=1, sticky=tk.EW, pady=2, padx=5)
+        
+        ttk.Button(add_frame, text="Adicionar Área", 
+                 command=self.add_new_area).grid(row=2, column=0, columnspan=2, pady=5)
+        
+        # Lista de áreas (apenas áreas cadastradas pelo usuário)
+        list_frame = ttk.LabelFrame(self.config_window, text="Áreas Cadastradas", padding=10)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        canvas = tk.Canvas(list_frame)
+        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=canvas.yview)
+        self.areas_scrollable_frame = ttk.Frame(canvas)
+        
+        self.areas_scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+        
+        canvas.create_window((0, 0), window=self.areas_scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        self.update_areas_list()
+        
+        # Configurar fechamento da janela
+        self.config_window.protocol("WM_DELETE_WINDOW", self.on_config_close)
+    
+    def add_new_area(self):
+        """Adiciona uma nova área"""
+        area_name = self.new_area_name.get().strip()
+        color = self.new_area_color.get().strip()
+        
+        if not area_name:
+            messagebox.showwarning("Aviso", "Por favor, informe o nome da área.")
+            return
+        
+        if area_name in self.areas:
+            messagebox.showwarning("Aviso", "Já existe uma área com este nome.")
+            return
+        
+        # Adicionar nova área
+        self.areas[area_name] = {'color': color, 'devices': []}
+        self.save_areas()
+        self.update_areas_list()
+        self.create_area_buttons()  # Atualizar botões na tela principal
+        
+        # Atualizar combobox de áreas na tela de configuração de dispositivos
+        if hasattr(self, 'new_area'):
+            available_areas = list(self.areas.keys())
+            self.new_area['values'] = available_areas
+            if available_areas:
+                self.new_area.set(available_areas[0])
+        
+        self.new_area_name.delete(0, tk.END)
+        self.append_message(f"Área '{area_name}' adicionada com sucesso!", "black")
+    
+    def update_areas_list(self):
+        """Atualiza a lista de áreas na tela de configuração"""
+        for widget in self.areas_scrollable_frame.winfo_children():
+            widget.destroy()
+        
+        for i, (area_name, area_data) in enumerate(self.areas.items()):
+            frame = ttk.LabelFrame(self.areas_scrollable_frame, text=area_name, padding=5)
+            frame.pack(fill=tk.X, padx=5, pady=5)
+            
+            # Mostrar cor atual
+            color_display = tk.Frame(frame, width=20, height=20, 
+                                   bg=self.available_colors.get(area_data['color'], '#CCCCCC'))
+            color_display.pack(side=tk.LEFT, padx=5)
+            
+            # Mostrar quantidade de dispositivos
+            device_count = len([d for d in self.relay_devices if d.get('area') == area_name])
+            ttk.Label(frame, text=f"Dispositivos: {device_count}").pack(side=tk.LEFT, padx=10)
+            
+            # Mostrar cor usada
+            ttk.Label(frame, text=f"Cor: {area_data['color']}").pack(side=tk.LEFT, padx=10)
+            
+            btn_frame = ttk.Frame(frame)
+            btn_frame.pack(side=tk.RIGHT, padx=5)
+            
+            ttk.Button(btn_frame, text="Remover", 
+                      command=lambda an=area_name: self.remove_area(an)).pack(side=tk.RIGHT, padx=2)
+    
+    def remove_area(self, area_name):
+        """Remove uma área"""
+        # Verificar se há dispositivos nesta área
+        devices_in_area = [d for d in self.relay_devices if d.get('area') == area_name]
+        if devices_in_area:
+            messagebox.showwarning("Aviso", 
+                                f"Não é possível remover a área '{area_name}' porque existem {len(devices_in_area)} dispositivo(s) vinculado(s) a ela.\n"
+                                f"Transfira os dispositivos para outra área antes de remover.")
+            return
+        
+        if messagebox.askyesno("Confirmar", f"Remover a área '{area_name}'?"):
+            del self.areas[area_name]
+            self.save_areas()
+            self.update_areas_list()
+            self.create_area_buttons()  # Atualizar botões na tela principal
+            
+            # Atualizar combobox de áreas na tela de configuração de dispositivos
+            if hasattr(self, 'new_area'):
+                available_areas = list(self.areas.keys())
+                self.new_area['values'] = available_areas
+                if available_areas:
+                    self.new_area.set(available_areas[0])
+            
+            self.append_message(f"Área '{area_name}' removida.", "black")
     
     def load_system_log(self):
         """Carrega o conteúdo do arquivo de log do sistema"""
@@ -612,7 +878,7 @@ class RelayTesterApp:
     def toggle_advanced_options(self):
         """Mostra/oculta as opções avançadas"""
         if self.advanced_options.get():
-            self.port_frame.grid(row=3, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2)
+            self.port_frame.grid(row=4, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2)
         else:
             self.port_frame.grid_forget()
     
@@ -767,16 +1033,23 @@ class RelayTesterApp:
             ip_entry.insert(0, device['ip'])
             ip_entry.grid(row=1, column=1, sticky=tk.EW, padx=5)
             
+            # Área do dispositivo (apenas áreas cadastradas pelo usuário)
+            available_areas = list(self.areas.keys())
+            ttk.Label(frame, text="Área:").grid(row=2, column=0, sticky=tk.W)
+            area_combo = ttk.Combobox(frame, values=available_areas)
+            area_combo.set(device.get('area', available_areas[0] if available_areas else ''))
+            area_combo.grid(row=2, column=1, sticky=tk.EW, padx=5)
+            
             # Mostrar porta se for diferente da padrão
             port = device.get('port', '80')
             if port != '80':
-                ttk.Label(frame, text=f"Porta: {port}").grid(row=2, column=0, columnspan=2, sticky=tk.W, padx=5)
+                ttk.Label(frame, text=f"Porta: {port}").grid(row=3, column=0, columnspan=2, sticky=tk.W, padx=5)
             
             btn_frame = ttk.Frame(frame)
-            btn_frame.grid(row=3, column=0, columnspan=2, pady=5)
+            btn_frame.grid(row=4, column=0, columnspan=2, pady=5)
             
             ttk.Button(btn_frame, text="Salvar", 
-                      command=lambda idx=i, n=name_entry, ip=ip_entry: self.save_relay(idx, n, ip)).pack(side=tk.LEFT, padx=5)
+                      command=lambda idx=i, n=name_entry, ip=ip_entry, ac=area_combo: self.save_relay(idx, n, ip, ac)).pack(side=tk.LEFT, padx=5)
             ttk.Button(btn_frame, text="Remover", 
                       command=lambda idx=i: self.remove_relay(idx)).pack(side=tk.LEFT, padx=5)
         
@@ -786,9 +1059,14 @@ class RelayTesterApp:
         """Adiciona um novo relé à lista"""
         name = self.new_name.get().strip()
         ip = self.new_ip.get().strip()
+        area = self.new_area.get().strip()
         
         if not name or not ip:
             messagebox.showwarning("Aviso", "Por favor, preencha o nome e o IP do relé.")
+            return
+        
+        if not area:
+            messagebox.showwarning("Aviso", "Por favor, selecione uma área para o relé.")
             return
         
         for device in self.relay_devices:
@@ -809,7 +1087,7 @@ class RelayTesterApp:
             return
         
         # Adicionar dispositivo
-        device_data = {'name': name, 'ip': ip}
+        device_data = {'name': name, 'ip': ip, 'area': area}
         if port != '80':
             device_data['port'] = port
         
@@ -822,15 +1100,20 @@ class RelayTesterApp:
         self.advanced_options.set(False)
         self.toggle_advanced_options()
         
-        self.append_message(f"Relé '{name}' ({ip}:{port}) adicionado com sucesso!", "black")
+        self.append_message(f"Relé '{name}' ({ip}:{port}) adicionado à área '{area}' com sucesso!", "black")
     
-    def save_relay(self, index, name_entry, ip_entry):
+    def save_relay(self, index, name_entry, ip_entry, area_combo):
         """Salva as alterações em um relé existente"""
         name = name_entry.get().strip()
         ip = ip_entry.get().strip()
+        area = area_combo.get().strip()
         
         if not name or not ip:
             messagebox.showwarning("Aviso", "Por favor, preencha o nome e o IP do relé.")
+            return
+        
+        if not area:
+            messagebox.showwarning("Aviso", "Por favor, selecione uma área para o relé.")
             return
         
         for i, device in enumerate(self.relay_devices):
@@ -842,7 +1125,7 @@ class RelayTesterApp:
         port = self.relay_devices[index].get('port', '80')
         
         # Atualizar dispositivo
-        device_data = {'name': name, 'ip': ip}
+        device_data = {'name': name, 'ip': ip, 'area': area}
         if port != '80':
             device_data['port'] = port
         
@@ -861,47 +1144,73 @@ class RelayTesterApp:
             port = device.get('port', '80')
             self.append_message(f"Relé '{device['name']}' ({device['ip']}:{port}) removido.", "black")
     
-    def toggle_image_and_send_pulse(self):
-        """Alterna a imagem e envia o pulso de emergência"""
-        self.image_state = not self.image_state
+    def toggle_image_and_send_pulse_area(self, area_name):
+        """Alterna a imagem e envia o pulso de emergência para uma área específica"""
+        # Obter dispositivos da área
+        if area_name == 'GERAL':
+            devices_to_activate = self.relay_devices  # TODOS os dispositivos
+            display_name = 'GERAL'
+        else:
+            devices_to_activate = [d for d in self.relay_devices if d.get('area') == area_name]
+            display_name = area_name
+        
+        if not devices_to_activate:
+            messagebox.showinfo("Informação", f"Não há dispositivos cadastrados na área '{display_name}'.")
+            return
         
         # Atualizar botão para mostrar que o comando está sendo enviado
-        self.emergency_btn.config(text="ENVIANDO...", bg='#FF8C00')
-        self.status_label.config(text="Enviando comando...", foreground='black')
+        if area_name == 'GERAL':
+            self.emergency_btn.config(text="ENVIANDO...", bg='#FF8C00')
+        else:
+            for widget in self.buttons_frame.winfo_children():
+                if hasattr(widget, 'cget') and area_name.upper() in widget.cget('text'):
+                    widget.config(text="ENVIANDO...", bg='#FF8C00')
+                    break
+        
+        self.status_label.config(text=f"Enviando comando para área '{display_name}'...", foreground='black')
         self.root.update()
         
         try:
             # Enviar comandos e obter resultados
-            results = self.send_delayed_pulse_all_devices()
+            results = self.send_delayed_pulse_to_devices(devices_to_activate, display_name)
             
             # Mostrar resultados em uma nova janela
-            self.show_results_window(results)
+            self.show_results_window(results, display_name)
             
             # Atualizar interface após envio
-            self.emergency_btn.config(text="EMERGÊNCIA\nDerrubar Catracas", bg=self.button_colors['emergency'])
-            self.status_label.config(text="Comando enviado com sucesso!", foreground=self.button_colors['success'])
+            if area_name == 'GERAL':
+                self.emergency_btn.config(text="GERAL", bg=self.button_colors['emergency'])
+            else:
+                self.create_area_buttons()  # Restaurar botões normais
+            
+            self.status_label.config(text=f"Comando para área '{display_name}' enviado com sucesso!", foreground=self.button_colors['success'])
         except Exception as e:
             # Se ocorrer algum erro, restaurar o estado normal do botão
-            self.emergency_btn.config(text="EMERGÊNCIA\nDerrubar Catracas", bg=self.button_colors['emergency'])
-            self.status_label.config(text="Erro ao enviar comando", foreground='red')
+            if area_name == 'GERAL':
+                self.emergency_btn.config(text="GERAL", bg=self.button_colors['emergency'])
+            else:
+                self.create_area_buttons()
+            
+            self.status_label.config(text=f"Erro ao enviar comando para área '{display_name}'", foreground='red')
             print(f"Erro ao enviar comando: {str(e)}")
         
         # Resetar após 3 segundos
         self.root.after(3000, lambda: self.status_label.config(text=""))
     
-    def send_delayed_pulse_all_devices(self):
-        """Envia o comando com delay de 5 segundos e retorna resultados"""
+    def send_delayed_pulse_to_devices(self, devices, area_name):
+        """Envia o comando com delay de 5 segundos para dispositivos específicos e retorna resultados"""
         password = self.password.get()
         results = []
         
-        if not self.relay_devices:
-            self.log_message("Nenhum dispositivo cadastrado para enviar comando.")
+        if not devices:
+            self.log_message(f"Nenhum dispositivo na área '{area_name}' para enviar comando.")
             return results
         
-        for device in self.relay_devices:
+        for device in devices:
             ip = device['ip']
             port = device.get('port', '80')
             device_name = device['name']
+            device_area = device.get('area', 'Nenhuma')
             status = "Falha"
             message = ""
             
@@ -917,7 +1226,7 @@ class RelayTesterApp:
                     message = f"Comando enviado com sucesso"
                     
                     # Agenda o desligamento após 5 segundos
-                    self.root.after(5000, lambda ip=ip, port=port, password=password: self.send_off_commands_all(ip, port, password, device_name))
+                    self.root.after(5000, lambda ip=ip, port=port, password=password, device_name=device_name: self.send_off_commands(ip, port, password, device_name))
                 else:
                     message = f"Erro HTTP - Status: {response1_on.status_code}, {response2_on.status_code}"
                 
@@ -928,15 +1237,16 @@ class RelayTesterApp:
                 'device': device_name,
                 'ip': ip,
                 'port': port,
+                'area': device_area,
                 'status': status,
                 'message': message
             })
             
-            self.log_message(f"{device_name} ({ip}:{port}): {status} - {message}")
+            self.log_message(f"Área '{area_name}' - {device_name} ({ip}:{port}): {status} - {message}")
         
         return results
     
-    def send_off_commands_all(self, ip, port, password, device_name):
+    def send_off_commands(self, ip, port, password, device_name):
         """Envia os comandos para desligar os relés após o delay"""
         try:
             url1_off = f"http://{ip}:{port}/relay_cgi.cgi?type=0&relay=0&on=0&time=0&pwd={password}"
@@ -953,17 +1263,17 @@ class RelayTesterApp:
         except Exception as e:
             self.log_message(f"Falha ao enviar comandos de desligamento para {device_name} ({ip}:{port}): {str(e)}")
     
-    def show_results_window(self, results):
+    def show_results_window(self, results, area_name):
         """Mostra uma janela com os resultados do comando de emergência"""
         results_window = tk.Toplevel(self.root)
-        results_window.title("Resultados do Comando de Emergência")
-        results_window.geometry("600x400")
+        results_window.title(f"Resultados - Área {area_name}")
+        results_window.geometry("700x400")  # Largura aumentada para caber a coluna de área
         
         # Configurar ícone
         self.set_window_icon(results_window)
         
         # Centralizar janela
-        window_width = 600
+        window_width = 700
         window_height = 400
         screen_width = results_window.winfo_screenwidth()
         screen_height = results_window.winfo_screenheight()
@@ -976,7 +1286,7 @@ class RelayTesterApp:
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Título
-        ttk.Label(main_frame, text="Resultados do Comando de Emergência", 
+        ttk.Label(main_frame, text=f"Resultados do Comando - Área {area_name}", 
                  font=('Helvetica', 12, 'bold')).pack(pady=(0, 10))
         
         # Frame para a tabela de resultados
@@ -986,8 +1296,9 @@ class RelayTesterApp:
         # Cabeçalho da tabela
         ttk.Label(table_frame, text="Dispositivo", font=('Helvetica', 10, 'bold')).grid(row=0, column=0, padx=5, pady=2, sticky=tk.W)
         ttk.Label(table_frame, text="IP:Porta", font=('Helvetica', 10, 'bold')).grid(row=0, column=1, padx=5, pady=2, sticky=tk.W)
-        ttk.Label(table_frame, text="Status", font=('Helvetica', 10, 'bold')).grid(row=0, column=2, padx=5, pady=2, sticky=tk.W)
-        ttk.Label(table_frame, text="Detalhes", font=('Helvetica', 10, 'bold')).grid(row=0, column=3, padx=5, pady=2, sticky=tk.W)
+        ttk.Label(table_frame, text="Área", font=('Helvetica', 10, 'bold')).grid(row=0, column=2, padx=5, pady=2, sticky=tk.W)
+        ttk.Label(table_frame, text="Status", font=('Helvetica', 10, 'bold')).grid(row=0, column=3, padx=5, pady=2, sticky=tk.W)
+        ttk.Label(table_frame, text="Detalhes", font=('Helvetica', 10, 'bold')).grid(row=0, column=4, padx=5, pady=2, sticky=tk.W)
         
         # Preencher tabela com resultados
         for i, result in enumerate(results, start=1):
@@ -997,16 +1308,19 @@ class RelayTesterApp:
             # IP:Porta
             ttk.Label(table_frame, text=f"{result['ip']}:{result['port']}").grid(row=i, column=1, padx=5, pady=2, sticky=tk.W)
             
+            # Área
+            ttk.Label(table_frame, text=result.get('area', 'Nenhuma')).grid(row=i, column=2, padx=5, pady=2, sticky=tk.W)
+            
             # Status (com cor)
             status_label = ttk.Label(table_frame, text=result['status'])
-            status_label.grid(row=i, column=2, padx=5, pady=2, sticky=tk.W)
+            status_label.grid(row=i, column=3, padx=5, pady=2, sticky=tk.W)
             if result['status'] == "Sucesso":
                 status_label.config(foreground='green')
             else:
                 status_label.config(foreground='red')
             
             # Detalhes
-            ttk.Label(table_frame, text=result['message']).grid(row=i, column=3, padx=5, pady=2, sticky=tk.W)
+            ttk.Label(table_frame, text=result['message']).grid(row=i, column=4, padx=5, pady=2, sticky=tk.W)
         
         # Botão de fechar
         btn_frame = ttk.Frame(main_frame)
@@ -1028,6 +1342,7 @@ class RelayTesterApp:
         for device in self.relay_devices:
             ip = device['ip']
             port = int(device.get('port', '80'))
+            area = device.get('area', 'Nenhuma')
             
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -1036,14 +1351,14 @@ class RelayTesterApp:
                 sock.close()
                 
                 if result == 0:
-                    self.append_message(f"{device['name']} ({ip}:{port}): Conectado", "green")
+                    self.append_message(f"{device['name']} ({ip}:{port}) - Área {area}: Conectado", "green")
                     connected_count += 1
                 else:
-                    self.append_message(f"{device['name']} ({ip}:{port}): Desconectado", "red")
+                    self.append_message(f"{device['name']} ({ip}:{port}) - Área {area}: Desconectado", "red")
                     disconnected_count += 1
             
             except Exception as e:
-                self.append_message(f"{device['name']} ({ip}:{port}): Erro ao testar - {str(e)}", "red")
+                self.append_message(f"{device['name']} ({ip}:{port}) - Área {area}: Erro ao testar - {str(e)}", "red")
                 disconnected_count += 1
     
     def clear_messages(self):
